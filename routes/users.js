@@ -541,9 +541,9 @@ router.post("/complain", async (req, res) => {
       const msg = {
         to: email, // Change to your recipient
         from: config.emailId, // Change to your verified sender
-        subject: "Received your complain.",
+        subject: "Received your complaint.",
         text: "Your contribution means a lot.",
-        html: `<p>Hello ${firstName} ${lastName},<br></p><p>We have received your complain about ${typeOfComplain} and this will be addressed real soon.</p><p>If you did not request this, please ignore this email.</p>`,
+        html: `<p>Hello ${firstName} ${lastName},<br></p><p>We have received your complaint about ${typeOfComplain} and this will be addressed real soon.</p><p>If you did not request this, please ignore this email.</p>`,
       };
       sgMail
         .send(msg)
@@ -618,9 +618,9 @@ router.put(
       const msg = {
         to: complain.user.email, // Change to your recipient
         from: config.emailId, // Change to your verified sender
-        subject: "You complain has been addressed.",
+        subject: "You complaint has been addressed.",
         text: "Your contribution means a lot.",
-        html: `<p>Hello ${complain.user.firstName} ${complain.user.lastName},<br></p><p>We have received your complain about ${complain.typeOfComplain} and this has been addressed. The status message of your complain reads as "${message}".</p><p>If you did not request this, please ignore this email.</p>`,
+        html: `<p>Hello ${complain.user.firstName} ${complain.user.lastName},<br></p><p>We have received your complaint about ${complain.typeOfComplain} and this has been addressed. The status message of your complaint reads as "${message}".</p><p>If you did not request this, please ignore this email.</p>`,
       };
       sgMail
         .send(msg)

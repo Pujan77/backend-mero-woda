@@ -61,12 +61,15 @@ router.post(
   (req, res) => {
     const token = jwt.sign({ id: req.user }, config.jwtSecret);
     res.json({
-      email: req.user.email,
-      token: token,
-      role: req.user.role,
-      firstName: req.user.firstName,
-      lastName: req.user.lastName,
-      createdAt: req.user.createdAt,
+      data: {
+        email: req.user.email,
+        token: token,
+        role: req.user.role,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        createdAt: req.user.createdAt,
+      },
+      message: "Successfully logged in.",
     });
   }
 );
