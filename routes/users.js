@@ -205,7 +205,7 @@ router.post(
 router.post("/notice/:id/signup", async (req, res) => {
   try {
     const { id } = req.params;
-    const { email, phone } = req.query;
+    const { firstName, lastName, email, phone } = req.body;
 
     // Find the notice based on the provided ID
     const notice = await Notice.findById(id);
@@ -213,27 +213,60 @@ router.post("/notice/:id/signup", async (req, res) => {
       return res.status(404).json({ error: "Notice not found." });
     }
 
-    // Check if the user is already signed up
-    const isUserSignedUp = notice.users.some(
-      (user) => user.email === email && user.phone === phone
-    );
-    if (isUserSignedUp) {
-      return res
-        .status(400)
-        .json({ error: "User already signed up for the notice." });
-    }
-
     // Find the user based on email and phone
-    const user = await User.findOne({ email, phone });
+    let user = await User.findOne({ email, phone });
     if (!user) {
-      return res.status(404).json({ error: "User not found." });
+      user = new User({ email, firstName, lastName, phone });
+      await user.save();
+
+      // Set news entity values to false
+      const news = new News({
+        user: user._id,
+        garbage: false,
+        campaign: false,
+        trainings: false,
+        sanitation: false,
+      });
+      await news.save();
+
+      // Check if the user is already signed up
+      const isUserSignedUp = notice.users.some(
+        (user) => user.email === email && user.phone === phone
+      );
+      if (isUserSignedUp) {
+        return res
+          .status(400)
+          .json({ error: "User already signed up for the notice." });
+      } else {
+        await Notice.findByIdAndUpdate(
+          id,
+          { $push: { users: user._id } },
+          { new: true }
+        );
+
+        return res
+          .status(200)
+          .json({ message: "User signed up successfully." });
+      }
+    } else {
+      // Check if the user is already signed up for the notice
+      const isUserSignedUp = notice.users.includes(user._id);
+      if (isUserSignedUp) {
+        return res
+          .status(400)
+          .json({ error: "User already signed up for the notice." });
+      } else {
+        await Notice.findByIdAndUpdate(
+          id,
+          { $push: { users: user._id } },
+          { new: true }
+        );
+
+        return res
+          .status(200)
+          .json({ message: "User signed up successfully." });
+      }
     }
-
-    // Push the user's ObjectId to the notice's users array
-    notice.users.push(user._id);
-    await notice.save();
-
-    return res.status(200).json({ message: "User signed up successfully." });
   } catch (error) {
     console.error("Error signing up user for notice:", error);
     return res.status(500).json({ error: "Internal server error." });
@@ -253,7 +286,19 @@ router.get("/notices", async (req, res) => {
     res.status(500).json({ error: "Internal server error." });
   }
 });
+router.get("/public-notices", async (req, res) => {
+  try {
+    // Find all notice entries
+    const notices = await Notice.find();
 
+    res.status(200).json({
+      notices: notices,
+    });
+  } catch (error) {
+    console.error("Error retrieving notices:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+});
 //get notice by id
 
 router.get("/notice/:id", async (req, res) => {
