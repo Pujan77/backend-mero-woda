@@ -1,6 +1,5 @@
 const mongoose = require("mongoose");
 
-// Define the schema
 const allNewsSchema = new mongoose.Schema({
   typeOfNotice: {
     type: String,
@@ -35,9 +34,14 @@ const allNewsSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  users: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+  ],
 });
 
-// Create the model
 const Notice = mongoose.model("Notice", allNewsSchema);
 
 module.exports = Notice;

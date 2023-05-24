@@ -34,7 +34,7 @@ router.post("/signup", async (req, res) => {
       from: config.emailId, // Change to your verified sender
       subject: "Welcome to Mero-Woda",
       text: "You are joining team as admin",
-      html: `<p>Hello,</p><p>You have signed in to mero-woda as ${role}.</p><p>If you did not request a password reset, please ignore this email.</p>`,
+      html: `<p>Hello,</p><p>You have signed in to mero-woda as ${role}.</p><p>If you did not request this, please ignore this email.</p>`,
     };
     sgMail
       .send(msg)

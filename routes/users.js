@@ -5,6 +5,8 @@ const config = require("../config/config");
 const sgMail = require("@sendgrid/mail");
 const { requireLogin, requireStaffRole } = require("../middleware/auth");
 const { Donation, DonationList } = require("../models/donations");
+const Complain = require("../models/complaints");
+const Notice = require("../models/allNews");
 
 const router = express.Router();
 sgMail.setApiKey(config.sgApi);
@@ -150,11 +152,23 @@ router.post(
   requireLogin,
   requireStaffRole,
   async (req, res) => {
-    const { typeOf } = req.body;
+    const { typeOf, ...noticeData } = req.body;
 
     try {
+      // Create a new notice with the provided data
+      const notice = new Notice(noticeData);
+
       // Find all news entries with the specified typeOf and populate the associated user
       const newsEntries = await News.find({ [typeOf]: true }).populate("user");
+
+      // Save the notice to the database
+      await notice.save();
+
+      // Update each news entry to include the notice ID
+      for (const newsEntry of newsEntries) {
+        newsEntry.notice = notice._id;
+        await newsEntry.save();
+      }
 
       // Send email to each associated user
       for (const newsEntry of newsEntries) {
@@ -166,7 +180,7 @@ router.post(
           to: user.email,
           subject: `Important ${typeOf} Information`,
           text: `Dear ${user.firstName} ${user.lastName},\n\nWe have important ${typeOf} information to share with you.`,
-          html: `<p>you received a mail for ${typeOf}.</p>`,
+          html: `<p>You received a mail for ${typeOf}.</p>`,
         };
 
         // Send the email
@@ -187,6 +201,92 @@ router.post(
     }
   }
 );
+
+router.post("/notice/:id/signup", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, phone } = req.query;
+
+    // Find the notice based on the provided ID
+    const notice = await Notice.findById(id);
+    if (!notice) {
+      return res.status(404).json({ error: "Notice not found." });
+    }
+
+    // Check if the user is already signed up
+    const isUserSignedUp = notice.users.some(
+      (user) => user.email === email && user.phone === phone
+    );
+    if (isUserSignedUp) {
+      return res
+        .status(400)
+        .json({ error: "User already signed up for the notice." });
+    }
+
+    // Find the user based on email and phone
+    const user = await User.findOne({ email, phone });
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    // Push the user's ObjectId to the notice's users array
+    notice.users.push(user._id);
+    await notice.save();
+
+    return res.status(200).json({ message: "User signed up successfully." });
+  } catch (error) {
+    console.error("Error signing up user for notice:", error);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
+
+router.get("/notices", async (req, res) => {
+  try {
+    // Find all notice entries
+    const notices = await Notice.find().populate("users");
+
+    res.status(200).json({
+      notices: notices,
+    });
+  } catch (error) {
+    console.error("Error retrieving notices:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+});
+
+//get notice by id
+
+router.get("/notice/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find the notice by ID and populate the associated users
+    const notice = await Notice.findById(id).populate("users.user");
+
+    if (!notice) {
+      return res.status(404).json({ error: "Notice not found." });
+    }
+
+    res.status(200).json({
+      notice: {
+        _id: notice._id,
+        noticeDetail: notice,
+        // Include other notice fields as needed
+
+        // users: notice.users.map((user) => ({
+        //   _id: user._id,
+        //   email: user.user.email,
+        //   firstName: user.user.firstName,
+        //   lastName: user.user.lastName,
+        //   // Include other user details as needed
+        // })),
+      },
+    });
+  } catch (error) {
+    console.error("Error retrieving notice:", error);
+    res.status(500).json({ error: "Internal server error." });
+  }
+});
 
 router.get("/donations", requireLogin, requireStaffRole, async (req, res) => {
   try {
@@ -353,5 +453,147 @@ router.post("/donate", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+router.post("/complain", async (req, res) => {
+  try {
+    const { email, phone } = req.query;
+    const { message, typeOfComplain, firstName, lastName } = req.body;
+
+    // Find the user based on email and phone number
+    let user = await User.findOne({ email, phone });
+    if (!user) {
+      // Create a new user
+      user = new User({ email, firstName, lastName, phone });
+
+      // Set news entity values to false
+      const news = new News({
+        user: user._id,
+        garbage: false,
+        campaign: false,
+        trainings: false,
+        sanitation: false,
+      });
+      await news.save();
+
+      user.news = news._id;
+      await user.save();
+      const msg = {
+        to: email, // Change to your recipient
+        from: config.emailId, // Change to your verified sender
+        subject: "Received your complain.",
+        text: "Welcome to Mero-woda",
+        html: `<p>Hello ${firstName} ${lastName},<br></p><p>We have received your complain about ${typeOfComplain} and this will be addressed real soon. We have included you in our system. If you would like to get notified about various activities. Please visit the site and get signed up.</p><p>If you did not request this, please ignore this email.</p>`,
+      };
+      sgMail
+        .send(msg)
+        .then(() => {
+          console.log(`Email sent to ${email}`);
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    } else {
+      const msg = {
+        to: email, // Change to your recipient
+        from: config.emailId, // Change to your verified sender
+        subject: "Received your complain.",
+        text: "Your contribution means a lot.",
+        html: `<p>Hello ${firstName} ${lastName},<br></p><p>We have received your complain about ${typeOfComplain} and this will be addressed real soon.</p><p>If you did not request this, please ignore this email.</p>`,
+      };
+      sgMail
+        .send(msg)
+        .then(() => {
+          console.log(`Email sent to ${email}`);
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    }
+
+    // Create a new complain and associate it with the user
+    const complain = new Complain({
+      user: user._id,
+      message,
+      typeOfComplain,
+    });
+    await complain.save();
+
+    return res.status(201).json({ message: "Complain posted successfully." });
+  } catch (error) {
+    console.error("Error posting complain:", error);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
+
+router.get("/complain", requireLogin, requireStaffRole, async (req, res) => {
+  try {
+    const complains = await Complain.find().populate("user");
+
+    // Map complains to include user details
+    const complainsWithUser = complains.map((complain) => ({
+      _id: complain._id,
+      message: complain.message,
+      typeOfComplain: complain.typeOfComplain,
+      createdDate: complain.createdAt,
+      addressedStatus: complain.addressedStatus,
+      user: {
+        _id: complain.user._id,
+        email: complain.user.email,
+        firstName: complain.user.firstName,
+        lastName: complain.user.lastName,
+        phone: complain.user.phone,
+      },
+    }));
+
+    return res.status(200).send({ data: { complains: complainsWithUser } });
+  } catch (error) {
+    console.error("Error retrieving complains:", error);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
+router.put(
+  "/complain/:id",
+  requireLogin,
+  requireStaffRole,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { message } = req.body;
+
+      // Find the complain based on the provided ID
+      const complain = await Complain.findById(id).populate("user");
+      if (!complain) {
+        return res.status(404).json({ error: "Complain not found." });
+      }
+
+      // Update the complain properties
+      complain.addressMessage = message;
+      complain.addressedStatus = true;
+      complain.updatedAt = new Date();
+      const msg = {
+        to: complain.user.email, // Change to your recipient
+        from: config.emailId, // Change to your verified sender
+        subject: "You complain has been addressed.",
+        text: "Your contribution means a lot.",
+        html: `<p>Hello ${complain.user.firstName} ${complain.user.lastName},<br></p><p>We have received your complain about ${complain.typeOfComplain} and this has been addressed. The status message of your complain reads as "${message}".</p><p>If you did not request this, please ignore this email.</p>`,
+      };
+      sgMail
+        .send(msg)
+        .then(() => {
+          console.log(`Email sent to ${complain.user.email}`);
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+      await complain.save();
+      return res
+        .status(200)
+        .json({ message: "Complain updated successfully.", data: complain });
+    } catch (error) {
+      console.error("Error updating complain:", error);
+      return res.status(500).json({ error: "Internal server error." });
+    }
+  }
+);
 
 module.exports = router;
