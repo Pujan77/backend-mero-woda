@@ -194,7 +194,7 @@ router.post(
           });
       }
 
-      res.status(200).json({ message: "Emails sent successfully" });
+      res.status(200).json({ message: "Notice Published Successfully" });
     } catch (error) {
       console.error("Error:", error);
       res.status(500).json({ message: "An error occurred" });
@@ -273,7 +273,7 @@ router.post("/notice/:id/signup", async (req, res) => {
   }
 });
 
-router.get("/notices", async (req, res) => {
+router.get("/notices", requireLogin, requireStaffRole, async (req, res) => {
   try {
     // Find all notice entries
     const notices = await Notice.find().populate("users");
